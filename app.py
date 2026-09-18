@@ -635,14 +635,17 @@ def plot_allocations(table: pd.DataFrame):
 
 
 def plot_scatter(df: pd.DataFrame, x: str, y: str):
+    """Plot a correlation scatter from the monthly aggregate table."""
     fig, ax = plt.subplots(figsize=(9, 5.2))
+
+    # corr_source is aggregated by month, so it intentionally has no
+    # 'Actividad' column. Do not request a hue that is not present.
     sns.scatterplot(
         data=df,
         x=x,
         y=y,
-        hue="Actividad",
-        alpha=0.55,
-        s=45,
+        alpha=0.60,
+        s=55,
         ax=ax,
     )
     sns.regplot(
@@ -656,7 +659,6 @@ def plot_scatter(df: pd.DataFrame, x: str, y: str):
     )
     ax.set_title(f"{x} vs. {y}")
     ax.grid(alpha=0.16)
-    ax.legend(frameon=False, bbox_to_anchor=(1.02, 1), loc="upper left")
     fig.tight_layout()
     return fig
 
