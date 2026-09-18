@@ -54,7 +54,7 @@ BASE_ALLOCATION = np.array([0.42, 0.16, 0.10, 0.08, 0.12, 0.12])
 # ============================================================
 
 st.set_page_config(
-    page_title="Optimización AP | Markowitz",
+    page_title="Optimización AP",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -669,39 +669,53 @@ def plot_scatter(df: pd.DataFrame, x: str, y: str):
 
 st.markdown('<div class="main-title">Optimización AP</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtitle">Aplicación de la lógica de Markowitz a Accounts Payable</div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <div class="privacy">
-    <b>Privacidad:</b> esta aplicación utiliza datos sintéticos/simulados por defecto.
-    No requiere ni utiliza información real, confidencial o propietaria de ninguna empresa.
-    Si cargas un CSV, evita incluir información confidencial.
-    </div>
-    """,
+    '<div class="subtitle">Modelo de optimización de capacidad operativa para Accounts Payable</div>',
     unsafe_allow_html=True,
 )
 
 # Sidebar
-st.sidebar.header("Parámetros del modelo")
+st.sidebar.header("Panel de control")
+
+st.sidebar.subheader("Parámetros de optimización")
 n_portfolios = st.sidebar.slider(
-    "Número de portafolios a simular",
+    "Simulaciones",
     min_value=1000,
     max_value=20000,
     value=5000,
     step=1000,
+    help="Cantidad de distribuciones posibles de capacidad que se evaluarán.",
 )
-seed = st.sidebar.number_input("Semilla de reproducibilidad", min_value=1, max_value=999999, value=SEED)
-show_activity_table = st.sidebar.checkbox("Mostrar tabla detallada de actividades", value=True)
+seed = st.sidebar.number_input(
+    "Semilla de reproducibilidad",
+    min_value=1,
+    max_value=999999,
+    value=SEED,
+    help="Mantiene los resultados reproducibles.",
+)
+show_activity_table = st.sidebar.checkbox(
+    "Mostrar tabla detallada",
+    value=True,
+)
+
+st.sidebar.divider()
+st.sidebar.subheader("Visualización")
+selected_activity = st.sidebar.selectbox(
+    "Actividad destacada",
+    ["Todas"] + ACTIVITIES,
+)
+show_monthly = st.sidebar.checkbox("Mostrar evolución mensual", value=True)
 
 st.sidebar.divider()
 st.sidebar.subheader("Datos")
 uploaded = st.sidebar.file_uploader(
-    "Opcional: cargar CSV",
+    "Cargar CSV opcional",
     type=["csv"],
-    help="El CSV debe contener las columnas indicadas en README.md.",
+    help="Si no cargas un archivo, la aplicación genera datos sintéticos automáticamente.",
+)
+
+st.sidebar.caption(
+    "El modelo utiliza seis actividades de AP, asignaciones no negativas y una capacidad "
+    "total equivalente al 100%."
 )
 
 if uploaded is None:
@@ -762,7 +776,7 @@ st.markdown('<div class="section-title">¿Qué estamos optimizando?</div>', unsa
 st.markdown(
     """
     <div class="info-card">
-    La lógica de Markowitz se adapta aquí a <b>capacidad operativa</b>, no a dinero invertido.
+    La metodología de optimización de portafolios se adapta aquí a <b>capacidad operativa</b>, no a dinero invertido.
     Las seis actividades de AP funcionan como los “activos” del portafolio; la capacidad mensual
     del equipo es el recurso limitado; el rendimiento es eficiencia operativa y el riesgo es
     variabilidad operacional. El modelo busca combinaciones de capacidad que permitan observar
@@ -782,6 +796,32 @@ c4.metric("Riesgo promedio", f"{activity_metrics['Riesgo operativo'].mean():.1%}
 c5.metric("Horas procesadas", f"{df['Horas de procesamiento'].sum():,.0f}")
 
 st.caption(f"Fuente del escenario: {data_source}.")
+
+# Executive summary cards
+st.markdown('<div class="section-title">Vista ejecutiva</div>', unsafe_allow_html=True)
+best_return = activity_metrics["Rendimiento operativo"].idxmax()
+lowest_risk = activity_metrics["Riesgo operativo"].idxmin()
+base_risk = base_rec["Riesgo"]
+min_risk = min_var_rec["Riesgo"]
+risk_change = (base_risk - min_risk) / max(base_risk, 1e-8)
+
+e1, e2, e3, e4 = st.columns(4)
+e1.metric("Mayor rendimiento individual", best_return)
+e2.metric("Menor riesgo individual", lowest_risk)
+e3.metric("Riesgo del escenario base", f"{base_risk:.1%}")
+e4.metric("Cambio de riesgo vs. base", f"{risk_change:+.1%}")
+
+st.markdown(
+    """
+    <div class="info-card">
+    <b>Cómo leer el dashboard:</b> primero observa el desempeño de las actividades,
+    después revisa cómo se relacionan entre sí y finalmente compara distintas distribuciones
+    de capacidad. El objetivo no es eliminar el riesgo, sino visualizar el intercambio entre
+    eficiencia y variabilidad operativa.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Activity analysis
 st.markdown('<div class="section-title">1. Análisis de las actividades de AP</div>', unsafe_allow_html=True)
@@ -811,6 +851,13 @@ display["Horas de procesamiento"] = display["Horas de procesamiento"].map(lambda
 
 if show_activity_table:
     st.dataframe(display, use_container_width=True)
+    csv_metrics = activity_metrics.reset_index().to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Descargar métricas de actividades (CSV)",
+        data=csv_metrics,
+        file_name="metricas_ap_sinteticas.csv",
+        mime="text/csv",
+    )
 
 with st.expander("¿Cómo se calcula el rendimiento y el riesgo?"):
     st.markdown(
@@ -839,8 +886,62 @@ with st.expander("¿Cómo se calcula el rendimiento y el riesgo?"):
         """
     )
 
+# Monthly operational trends
+if show_monthly:
+    st.markdown('<div class="section-title">2. Evolución mensual</div>', unsafe_allow_html=True)
+    monthly_kpis = (
+        df.groupby("Mes")
+        .agg(
+            volumen=("Actividad", "size"),
+            monto_promedio=("Monto de factura", "mean"),
+            tiempo_promedio=("Tiempo de procesamiento", "mean"),
+            excepciones=("Indicador de excepción", "mean"),
+            po=("Indicador de cumplimiento de PO", "mean"),
+            pago=("Indicador de pago a tiempo", "mean"),
+            horas=("Horas de procesamiento", "sum"),
+        )
+        .reset_index()
+    )
+
+    metric_month = st.selectbox(
+        "Indicador mensual",
+        [
+            "volumen",
+            "monto_promedio",
+            "tiempo_promedio",
+            "excepciones",
+            "po",
+            "pago",
+            "horas",
+        ],
+        format_func=lambda x: {
+            "volumen": "Volumen de facturas",
+            "monto_promedio": "Monto promedio",
+            "tiempo_promedio": "Tiempo promedio",
+            "excepciones": "Tasa de excepciones",
+            "po": "Cumplimiento de PO",
+            "pago": "Pago a tiempo",
+            "horas": "Horas de procesamiento",
+        }[x],
+    )
+
+    fig_m, ax_m = plt.subplots(figsize=(11, 4.8))
+    ax_m.plot(
+        monthly_kpis["Mes"],
+        monthly_kpis[metric_month],
+        marker="o",
+        linewidth=2.2,
+    )
+    ax_m.set_title("Evolución mensual del indicador seleccionado")
+    ax_m.set_xlabel("")
+    ax_m.grid(alpha=0.18)
+    ax_m.tick_params(axis="x", rotation=35)
+    fig_m.tight_layout()
+    st.pyplot(fig_m, use_container_width=True)
+    plt.close(fig_m)
+
 # Correlation analysis
-st.markdown('<div class="section-title">2. Análisis de correlaciones</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">3. Análisis de correlaciones</div>', unsafe_allow_html=True)
 
 corr_source = (
     df.groupby("Mes")
@@ -902,7 +1003,7 @@ st.caption(
 )
 
 # Markowitz simulation
-st.markdown('<div class="section-title">3. Simulación de portafolios operativos</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">4. Simulación de portafolios operativos</div>', unsafe_allow_html=True)
 st.write(
     f"Se generaron **{len(simulated):,} combinaciones** de asignación. Cada combinación tiene "
     "pesos no negativos que suman 100%."
@@ -949,7 +1050,7 @@ st.markdown(
 )
 
 # Allocation comparison
-st.markdown('<div class="section-title">4. Comparación de asignaciones</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">5. Comparación de asignaciones</div>', unsafe_allow_html=True)
 table = allocation_table(
     [
         {"Portafolio": "Asignación Base", "weights": BASE_ALLOCATION},
@@ -984,7 +1085,7 @@ st.pyplot(fig, use_container_width=True)
 plt.close(fig)
 
 # Natural-language interpretation
-st.markdown('<div class="section-title">5. Interpretación automática</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">6. Interpretación automática</div>', unsafe_allow_html=True)
 
 max_return_activity = activity_metrics["Rendimiento operativo"].idxmax()
 min_risk_activity = activity_metrics["Riesgo operativo"].idxmin()
@@ -1012,6 +1113,48 @@ with st.expander("Limitaciones y lectura responsable"):
         - La correlación no demuestra causalidad.
         """
     )
+
+st.markdown('<div class="section-title">7. Metodología en una vista</div>', unsafe_allow_html=True)
+
+m1, m2, m3 = st.columns(3)
+with m1:
+    st.markdown(
+        """
+        **1 · Medir**
+
+        Se generan o cargan datos de AP y se calculan volumen, monto, tiempos,
+        excepciones, PO, pagos y horas.
+        """
+    )
+with m2:
+    st.markdown(
+        """
+        **2 · Evaluar**
+
+        Se construyen índices de rendimiento y riesgo operativo para cada actividad
+        y se estima su interacción mediante correlaciones.
+        """
+    )
+with m3:
+    st.markdown(
+        """
+        **3 · Optimizar**
+
+        Se prueban miles de distribuciones de capacidad para identificar distintos
+        equilibrios entre rendimiento y riesgo.
+        """
+    )
+
+st.markdown(
+    """
+    <div class="info-card">
+    <b>Nota metodológica:</b> el modelo está diseñado como una demostración académica de
+    optimización de recursos limitados. Los resultados dependen de los datos y supuestos
+    utilizados y deben interpretarse junto con las restricciones reales de operación.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown("---")
 st.caption(
