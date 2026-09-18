@@ -805,11 +805,35 @@ base_risk = base_rec["Riesgo"]
 min_risk = min_var_rec["Riesgo"]
 risk_change = (base_risk - min_risk) / max(base_risk, 1e-8)
 
+# Short labels keep the executive KPI cards readable on smaller screens.
+# The full activity name is shown in the caption below the cards.
+best_return_short = {
+    ACTIVITIES[0]: "Facturas estándar",
+    ACTIVITIES[1]: "Excepciones",
+    ACTIVITIES[2]: "Facturas sin PO",
+    ACTIVITIES[3]: "Facturas de alto monto",
+    ACTIVITIES[4]: "Facturas pendientes",
+    ACTIVITIES[5]: "Statements de proveedores",
+}.get(best_return, best_return)
+
+lowest_risk_short = {
+    ACTIVITIES[0]: "Facturas estándar",
+    ACTIVITIES[1]: "Excepciones",
+    ACTIVITIES[2]: "Facturas sin PO",
+    ACTIVITIES[3]: "Facturas de alto monto",
+    ACTIVITIES[4]: "Facturas pendientes",
+    ACTIVITIES[5]: "Statements de proveedores",
+}.get(lowest_risk, lowest_risk)
+
 e1, e2, e3, e4 = st.columns(4)
-e1.metric("Mayor rendimiento individual", best_return)
-e2.metric("Menor riesgo individual", lowest_risk)
+e1.metric("Mayor rendimiento individual", best_return_short)
+e2.metric("Menor riesgo individual", lowest_risk_short)
 e3.metric("Riesgo del escenario base", f"{base_risk:.1%}")
 e4.metric("Cambio de riesgo vs. base", f"{risk_change:+.1%}")
+
+st.caption(
+    f"Mayor rendimiento: {best_return} · Menor riesgo: {lowest_risk}"
+)
 
 st.markdown(
     """
@@ -827,7 +851,7 @@ st.markdown(
 st.markdown('<div class="section-title">1. Análisis de las actividades de AP</div>', unsafe_allow_html=True)
 st.write(
     "Las siete variables principales describen carga, magnitud económica, eficiencia, calidad, "
-    "cumplimiento y consumo de capacidad. No todas entran directamente en la fórmula de Markowitz."
+    "cumplimiento y consumo de capacidad. No todas entran directamente en la fórmula de optimización."
 )
 
 display_cols = [
