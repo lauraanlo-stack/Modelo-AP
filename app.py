@@ -370,10 +370,13 @@ def covariance_matrix(activity_metrics: pd.DataFrame, monthly_performance: pd.Da
     performance. The resulting matrix is PSD by construction.
     """
     corr = monthly_performance.corr().reindex(index=ACTIVITIES, columns=ACTIVITIES).fillna(0.0)
-    np.fill_diagonal(corr.values, 1.0)
+
+    # Use an explicit writable NumPy copy. This is compatible with newer
+    # NumPy/Pandas combinations where DataFrame-backed arrays may be read-only.
+    corr_values = corr.to_numpy(dtype=float, copy=True)
+    np.fill_diagonal(corr_values, 1.0)
 
     # Project small numerical asymmetries to a positive-semidefinite matrix.
-    corr_values = corr.to_numpy(dtype=float)
     eigvals, eigvecs = np.linalg.eigh(corr_values)
     eigvals = np.clip(eigvals, 0.001, None)
     corr_psd = eigvecs @ np.diag(eigvals) @ eigvecs.T
